@@ -1,23 +1,30 @@
 import os
 import sys
 import argparse
+import re
+import threading
 
 try:
     from pytube import YouTube, Playlist
     from moviepy.editor import *
 except ImportError as e:
     sys.exit(f"Required module missing: {e.name}. Please install it with 'pip install {e.name}'.")
+    
+def sanitize_filename(filename):
+    sanitized = re.sub(r'[\\/*?:"<>|]', ' ', filename)
+    return sanitized if sanitized.strip() != "" else "default_filename"
 
 def download_video(url: str, folder_path: str, format_type: str):
     try:
         video = YouTube(url)
-        filename = f"{video.title}.{format_type}"
+        sanitized_title = sanitize_filename(video.title)
+        filename = f"{sanitized_title}.{format_type}"
 
         if format_type == 'mp3':
             stream = video.streams.filter(only_audio=True).first()
             if stream is None:
                 raise Exception("No audio stream found")
-            temp_filename = f"{video.title}_temp.mp4"
+            temp_filename = f"{sanitized_title}_temp.mp4"
             temp_file_path = stream.download(output_path=folder_path, filename=temp_filename)
             final_file_path = os.path.join(folder_path, filename)
             convert_to_mp3(temp_file_path, final_file_path)
@@ -29,17 +36,31 @@ def download_video(url: str, folder_path: str, format_type: str):
 
         return True, None
     except Exception as e:
+        print(f"Error downloading video {url}: {e}")
         return False, (video.title, url)
 
 
 def download_playlist(playlist_url: str, folder_path: str, format_type: str) -> None:
     playlist = Playlist(playlist_url)
+    threads = []
     failed_videos = []
 
+    def download_and_track(url):
+        if not download_video(url, folder_path, format_type):
+            failed_videos.append(url)
+
     for url in playlist.video_urls:
-        success, result = download_video(url, folder_path, format_type)
-        if not success:
-            failed_videos.append(result)
+        thread = threading.Thread(target=download_and_track, args=(url,))
+        threads.append(thread)
+        thread.start()
+
+        if len(threads) >= 4:
+            for t in threads:
+                t.join()
+            threads = []
+
+    for t in threads:
+        t.join()
 
     total_videos = len(playlist.video_urls)
     downloaded_count = total_videos - len(failed_videos)
@@ -47,8 +68,8 @@ def download_playlist(playlist_url: str, folder_path: str, format_type: str) -> 
     print(f"\nDownloaded {downloaded_count}/{total_videos} videos.")
     if failed_videos:
         print("Videos that were not downloaded:")
-        for title, url in failed_videos:
-            print(f"{title} - {url}")
+        for url in failed_videos:
+            print(url)
 
 def convert_to_mp3(temp_file_path: str, final_file_path: str) -> None:
     video_clip = AudioFileClip(temp_file_path)
