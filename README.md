@@ -1,5 +1,5 @@
 # YouTubeDownloader
-Simple command-line interface tool to download YouTube a single video or full playlists as mp3 or mp4. I used this to create a local spotify playlist from a YouTube playlist. Automatically selects highest quality pytube supports.
+Simple command-line tool to download YouTube a single video or full playlists as mp3 or mp4. I used this to create a local spotify playlist from a YouTube playlist.
 
 > [!NOTE]
 > Playlist needs to at least Unlisted or Public, Private playlists can't be downloaded.
